@@ -1,48 +1,77 @@
-FROM debian:trixie
+# Build stage
+FROM debian:trixie AS builder
+
+ENV SQUID_DIR=/usr/local/squid
+ENV SQUID_LINK=https://github.com/squid-cache/squid/releases/download/SQUID_7_4/squid-7.4.tar.bz2
+ENV SQUID_VERSION=7.4
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get -qq -y install \
+    build-essential \
+    libssl-dev \
+    wget \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download and extract Squid
+RUN wget -q $SQUID_LINK && \
+    tar xjf squid-${SQUID_VERSION}.tar.bz2 && \
+    rm squid-${SQUID_VERSION}.tar.bz2
+
+# Build Squid
+RUN cd squid-${SQUID_VERSION} && \
+    ./configure \
+    --prefix=$SQUID_DIR \
+    --enable-ssl \
+    --with-openssl \
+    --enable-ssl-crtd \
+    --with-large-files \
+    --enable-auth \
+    --enable-icap-client && \
+    make -j$(nproc) && \
+    make install
+
+# Configure Squid
+RUN echo "#====added config===" >> $SQUID_DIR/etc/squid.conf && \
+    echo "cache_effective_user squid" >> $SQUID_DIR/etc/squid.conf && \
+    echo "cache_effective_group squid" >> $SQUID_DIR/etc/squid.conf && \
+    echo "always_direct allow all" >> $SQUID_DIR/etc/squid.conf && \
+    echo "icap_service_failure_limit -1" >> $SQUID_DIR/etc/squid.conf && \
+    echo "ssl_bump server-first all" >> $SQUID_DIR/etc/squid.conf && \
+    echo "sslproxy_cert_error allow all" >> $SQUID_DIR/etc/squid.conf && \
+    echo "sslproxy_flags DONT_VERIFY_PEER" >> $SQUID_DIR/etc/squid.conf && \
+    sed "/^http_port 3128$/d" -i $SQUID_DIR/etc/squid.conf && \
+    sed "s/^http_access allow localnet$/http_access allow all/" -i $SQUID_DIR/etc/squid.conf && \
+    sed "/^http_port 3130 intercept/d" -i $SQUID_DIR/etc/squid.conf && \
+    echo "https_port 3131 intercept ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB cert=$SQUID_DIR/ssl/bluestar.crt key=$SQUID_DIR/ssl/bluestar.pem" >> $SQUID_DIR/etc/squid.conf && \
+    echo "http_port 3128 ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB cert=$SQUID_DIR/ssl/bluestar.crt key=$SQUID_DIR/ssl/bluestar.pem" >> $SQUID_DIR/etc/squid.conf
+
+# Runtime stage
+FROM debian:trixie-slim
 
 ENV SQUID_USER=squid
-ENV SQUID_DIR /usr/local/squid
-ENV SQUID_LINK https://github.com/squid-cache/squid/releases/download/SQUID_7_4/squid-7.4.tar.bz2
-ENV SQUID_VERSION 7.4
+ENV SQUID_DIR=/usr/local/squid
 
-#RUN apt-get update && \
-#    apt-get -qq -y install openssl libssl1.0-dev build-essential wget curl net-tools dnsutils tcpdump && \
-#    apt-get clean
-
-RUN apt-get update && apt-get -qq -y install build-essential && apt clean
-
+# Install only runtime dependencies
 RUN apt-get update && \
-    apt-get -qq -y install openssl libssl-dev wget curl net-tools dnsutils tcpdump && \
-    apt-get clean
+    apt-get -qq -y install \
+    openssl \
+    libssl3t64 \
+    iptables \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# squid 3.5.27
-RUN wget $SQUID_LINK
-RUN ls
-RUN tar xvfjp squid-7.4.tar.bz2
+# Copy built Squid from builder
+COPY --from=builder $SQUID_DIR $SQUID_DIR
 
-RUN cd squid-7.4 && ./configure --help && ./configure --prefix=$SQUID_DIR --enable-ssl --with-openssl --enable-ssl-crtd --with-large-files --enable-auth --enable-icap-client && \
-    make -j4 && make install
-
-RUN mkdir -p $SQUID_DIR/var/lib
-RUN mkdir -p $SQUID_DIR/ssl
-RUN $SQUID_DIR/libexec/security_file_certgen -c -s $SQUID_DIR/var/lib/ssl_db -M 4MB
-RUN mkdir -p $SQUID_DIR/var/cache
-RUN useradd $SQUID_USER -U -b $SQUID_DIR
-RUN chown -R ${SQUID_USER}:${SQUID_USER} $SQUID_DIR
-RUN echo "#====added config===" >> $SQUID_DIR/etc/squid.conf
-RUN echo "cache_effective_user $SQUID_USER" >> $SQUID_DIR/etc/squid.conf
-RUN echo "cache_effective_group $SQUID_USER" >> $SQUID_DIR/etc/squid.conf
-RUN echo "always_direct allow all" >> $SQUID_DIR/etc/squid.conf
-RUN echo "icap_service_failure_limit -1" >> $SQUID_DIR/etc/squid.conf
-RUN echo "ssl_bump server-first all" >> $SQUID_DIR/etc/squid.conf
-RUN echo "sslproxy_cert_error allow all" >> $SQUID_DIR/etc/squid.conf
-RUN echo "sslproxy_flags DONT_VERIFY_PEER" >> $SQUID_DIR/etc/squid.conf
-RUN sed "/^http_port 3128$/d" -i $SQUID_DIR/etc/squid.conf
-RUN sed "s/^http_access allow localnet$/http_access allow all/" -i $SQUID_DIR/etc/squid.conf
-RUN sed "/^http_port 3130 intercept" -i $SQUID_DIR/etc/squid.conf
-RUN echo "https_port 3131 intercept ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB cert=$SQUID_DIR/ssl/bluestar.crt key=$SQUID_DIR/ssl/bluestar.pem" >> $SQUID_DIR/etc/squid.conf
-RUN echo "http_port 3128 ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB cert=$SQUID_DIR/ssl/bluestar.crt key=$SQUID_DIR/ssl/bluestar.pem" >> $SQUID_DIR/etc/squid.conf
-RUN cat $SQUID_DIR/etc/squid.conf | grep added\ config -A1000 #fflush()
+# Create necessary directories and user
+RUN mkdir -p $SQUID_DIR/var/lib && \
+    mkdir -p $SQUID_DIR/ssl && \
+    mkdir -p $SQUID_DIR/var/cache && \
+    useradd $SQUID_USER -U -b $SQUID_DIR && \
+    $SQUID_DIR/libexec/security_file_certgen -c -s $SQUID_DIR/var/lib/ssl_db -M 4MB && \
+    chown -R ${SQUID_USER}:${SQUID_USER} $SQUID_DIR
 
 
 EXPOSE 3128
