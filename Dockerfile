@@ -1,26 +1,31 @@
-FROM raspbian/stretch
-MAINTAINER Justin Schwartzbeck <justinmschw@gmail.com>
+FROM debian:trixie
 
 ENV SQUID_USER=squid
 ENV SQUID_DIR /usr/local/squid
-ENV SQUID_LINK http://www.squid-cache.org/Versions/v3/3.5/squid-3.5.27.tar.gz
-ENV SQUID_VERSION 3.5.27
+ENV SQUID_LINK https://github.com/squid-cache/squid/releases/download/SQUID_7_4/squid-7.4.tar.bz2
+ENV SQUID_VERSION 7.4
+
+#RUN apt-get update && \
+#    apt-get -qq -y install openssl libssl1.0-dev build-essential wget curl net-tools dnsutils tcpdump && \
+#    apt-get clean
+
+RUN apt-get update && apt-get -qq -y install build-essential && apt clean
 
 RUN apt-get update && \
-    apt-get -qq -y install openssl libssl1.0-dev build-essential wget curl net-tools dnsutils tcpdump && \
+    apt-get -qq -y install openssl libssl-dev wget curl net-tools dnsutils tcpdump && \
     apt-get clean
 
 # squid 3.5.27
-RUN wget http://www.squid-cache.org/Versions/v3/3.5/squid-3.5.27.tar.gz && \
-    tar xzvf squid-3.5.27.tar.gz && \
-    cd squid-3.5.27 && \
-    ./configure --prefix=$SQUID_DIR --enable-ssl --with-openssl --enable-ssl-crtd --with-large-files --enable-auth --enable-icap-client && \
-    make -j4 && \
-    make install
+RUN wget $SQUID_LINK
+RUN ls
+RUN tar xvfjp squid-7.4.tar.bz2
+
+RUN cd squid-7.4 && ./configure --help && ./configure --prefix=$SQUID_DIR --enable-ssl --with-openssl --enable-ssl-crtd --with-large-files --enable-auth --enable-icap-client && \
+    make -j4 && make install
 
 RUN mkdir -p $SQUID_DIR/var/lib
 RUN mkdir -p $SQUID_DIR/ssl
-RUN $SQUID_DIR/libexec/ssl_crtd -c -s $SQUID_DIR/var/lib/ssl_db
+RUN $SQUID_DIR/libexec/security_file_certgen -c -s $SQUID_DIR/var/lib/ssl_db -M 4MB
 RUN mkdir -p $SQUID_DIR/var/cache
 RUN useradd $SQUID_USER -U -b $SQUID_DIR
 RUN chown -R ${SQUID_USER}:${SQUID_USER} $SQUID_DIR
