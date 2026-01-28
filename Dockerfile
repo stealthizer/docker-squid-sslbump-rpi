@@ -40,10 +40,11 @@ RUN echo "#====added config===" >> $SQUID_DIR/etc/squid.conf && \
     echo "icap_service_failure_limit -1" >> $SQUID_DIR/etc/squid.conf && \
     echo "ssl_bump server-first all" >> $SQUID_DIR/etc/squid.conf && \
     echo "sslproxy_cert_error allow all" >> $SQUID_DIR/etc/squid.conf && \
-    echo "sslproxy_flags DONT_VERIFY_PEER" >> $SQUID_DIR/etc/squid.conf && \
+    echo "tls_outgoing_options flags=DONT_VERIFY_PEER" >> $SQUID_DIR/etc/squid.conf && \
     sed "/^http_port 3128$/d" -i $SQUID_DIR/etc/squid.conf && \
     sed "s/^http_access allow localnet$/http_access allow all/" -i $SQUID_DIR/etc/squid.conf && \
     sed "/^http_port 3130 intercept/d" -i $SQUID_DIR/etc/squid.conf && \
+    echo "sslcrtd_program $SQUID_DIR/libexec/security_file_certgen -s $SQUID_DIR/var/lib/ssl_db -M 4MB" >> $SQUID_DIR/etc/squid.conf && \
     echo "https_port 3131 intercept ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB cert=$SQUID_DIR/ssl/bluestar.crt key=$SQUID_DIR/ssl/bluestar.pem" >> $SQUID_DIR/etc/squid.conf && \
     echo "http_port 3128 ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB cert=$SQUID_DIR/ssl/bluestar.crt key=$SQUID_DIR/ssl/bluestar.pem" >> $SQUID_DIR/etc/squid.conf
 

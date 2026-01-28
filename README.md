@@ -15,6 +15,9 @@ docker build . -t docker-squid-sslbump-rpi
 docker run -ti -p 3128:3128 docker-squid-sslbump-rpi
 #C-p q to detach, or
 #docker run -d -p 3128:3128 docker-squid-sslbump-rpi
+
+# For transparent proxy mode (requires NET_ADMIN capability):
+docker run -d -p 3128:3128 -p 3131:3131 --cap-add=NET_ADMIN -e TRANSPARENT=1 docker-squid-sslbump-rpi
 ```
 
 Usage (Proxy)
