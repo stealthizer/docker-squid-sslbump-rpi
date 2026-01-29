@@ -70,6 +70,7 @@ COPY --from=builder $SQUID_DIR $SQUID_DIR
 RUN mkdir -p $SQUID_DIR/var/lib && \
     mkdir -p $SQUID_DIR/ssl && \
     mkdir -p $SQUID_DIR/var/cache && \
+    mkdir -p $SQUID_DIR/var/logs && \
     useradd $SQUID_USER -U -b $SQUID_DIR && \
     $SQUID_DIR/libexec/security_file_certgen -c -s $SQUID_DIR/var/lib/ssl_db -M 4MB && \
     chown -R ${SQUID_USER}:${SQUID_USER} $SQUID_DIR

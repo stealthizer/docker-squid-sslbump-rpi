@@ -10,6 +10,19 @@ if [ ! -f $SQUID_DIR/ssl/bluestar.pem ]; then
     openssl x509 -in $SQUID_DIR/ssl/bluestar.crt -outform DER -out $SQUID_DIR/ssl/bluestar.der
 fi
 
+# Ensure required directories exist with proper permissions
+mkdir -p $SQUID_DIR/var/logs
+mkdir -p $SQUID_DIR/var/cache
+mkdir -p $SQUID_DIR/var/lib/ssl_db
+chown -R ${SQUID_USER}:${SQUID_USER} $SQUID_DIR/var
+chown -R ${SQUID_USER}:${SQUID_USER} $SQUID_DIR/ssl
+
+# Initialize SSL certificate database if needed
+if [ ! -d "$SQUID_DIR/var/lib/ssl_db" ] || [ -z "$(ls -A $SQUID_DIR/var/lib/ssl_db)" ]; then
+    $SQUID_DIR/libexec/security_file_certgen -c -s $SQUID_DIR/var/lib/ssl_db -M 4MB
+    chown -R ${SQUID_USER}:${SQUID_USER} $SQUID_DIR/var/lib/ssl_db
+fi
+
 if [ $SAFESEARCH ]; then
 	echo "216.239.38.120 youtube.com" >> /etc/hosts
 	echo "216.239.38.120 www.youtube.com" >> /etc/hosts
@@ -21,11 +34,11 @@ if [ $SAFESEARCH ]; then
 fi
 
 cleanup() {
-    iptables -t nat -D OUTPUT -p tcp --syn --dport 80 -j REDIRECT --to-port 3130
-    iptables -t nat -D PREROUTING -p tcp --syn --dport 80 -j REDIRECT --to-port 3130
-    iptables -t nat -D OUTPUT -p tcp --syn --dport 443 -j REDIRECT --to-port 3131
-    iptables -t nat -D PREROUTING -p tcp --syn --dport 443 -j REDIRECT --to-port 3131
-    iptables -t nat -D OUTPUT -m owner --uid-owner squid -j RETURN
+    iptables -t nat -D OUTPUT -p tcp --syn --dport 80 -j REDIRECT --to-port 3130 2>/dev/null || true
+    iptables -t nat -D PREROUTING -p tcp --syn --dport 80 -j REDIRECT --to-port 3130 2>/dev/null || true
+    iptables -t nat -D OUTPUT -p tcp --syn --dport 443 -j REDIRECT --to-port 3131 2>/dev/null || true
+    iptables -t nat -D PREROUTING -p tcp --syn --dport 443 -j REDIRECT --to-port 3131 2>/dev/null || true
+    iptables -t nat -D OUTPUT -m owner --uid-owner squid -j RETURN 2>/dev/null || true
 }
 trap cleanup EXIT
 cleanup
